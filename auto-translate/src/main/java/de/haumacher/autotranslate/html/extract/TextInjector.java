@@ -13,7 +13,9 @@ import org.w3c.dom.Node;
 
 public class TextInjector {
 
-	private static final Pattern MARKUP_PATTERN = Pattern.compile("<(/)?x([1-9]\\d*)>");
+	// Case-insensitive: DeepL sometimes returns a marker capitalized
+	// (<X1>...</X1>), which would otherwise end up as literal text.
+	private static final Pattern MARKUP_PATTERN = Pattern.compile("<(/)?x([1-9]\\d*)>", Pattern.CASE_INSENSITIVE);
 
 	private List<Element> _children = new ArrayList<>();
 	private Set<Element> _contentElements = new HashSet<>();
