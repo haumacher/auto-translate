@@ -42,6 +42,23 @@ public class TestTextInjector {
 		Assertions.assertTrue(text.contains("Text"), text);
 	}
 
+	/**
+	 * DeepL may return a marker capitalized ({@code <X1>}); it must still be
+	 * restored to the source element instead of ending up as literal text.
+	 */
+	@Test
+	public void testCapitalizedMarker() throws SAXException, IOException, ParserConfigurationException {
+		Document doc = parse("<p>Du kannst es <a href=\"#x\">selbst hosten</a>.</p>");
+		Element p = doc.getDocumentElement();
+
+		new TextInjector(p).inject("Tu peux <X1>l'héberger toi-même</X1>.");
+
+		Assertions.assertFalse(p.getTextContent().contains("X1"), p.getTextContent());
+		Element a = (Element) p.getElementsByTagName("a").item(0);
+		Assertions.assertEquals("l'héberger toi-même", a.getTextContent());
+		Assertions.assertEquals("#x", a.getAttribute("href"));
+	}
+
 	private static Document parse(String html) throws SAXException, IOException, ParserConfigurationException {
 		return TestHtmlAnalyzer.parse(html);
 	}
