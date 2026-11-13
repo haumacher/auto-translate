@@ -59,4 +59,22 @@ public class TestHtmlFileTranslator {
 
 		assertEquals("foo bar<x1></x1>", result);
 	}
+	@Test
+	public void testToDeepLXmlEscapesTextButKeepsMarkers() {
+		assertEquals("A &amp; B &lt; C &gt; D <x1>Link</x1>",
+			HtmlFileTranslator.toDeepLXml("A & B < C > D <x1>Link</x1>"));
+	}
+
+	@Test
+	public void testFromDeepLXmlResolvesEntities() {
+		assertEquals("A & B < C > \"D\" 'E' \u00e9 \u00e9 <x1>Link</x1>",
+			HtmlFileTranslator.fromDeepLXml("A &amp; B &lt; C &gt; &quot;D&quot; &apos;E&apos; &#233; &#xe9; <x1>Link</x1>"));
+	}
+
+	@Test
+	public void testDeepLXmlRoundTrip() {
+		String text = "Fritz!Box &amp; Co. <x1>a < b</x1> & <x2>c</x2>";
+		assertEquals(text, HtmlFileTranslator.fromDeepLXml(HtmlFileTranslator.toDeepLXml(text)));
+	}
+
 }

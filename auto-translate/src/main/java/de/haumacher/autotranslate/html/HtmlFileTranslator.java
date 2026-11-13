@@ -10,6 +10,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.xml.parsers.ParserConfigurationException;
 
@@ -18,6 +20,7 @@ import org.xml.sax.SAXException;
 
 import com.deepl.api.DeepLException;
 import com.deepl.api.TextResult;
+import com.deepl.api.TextTranslationOptions;
 import com.deepl.api.Translator;
 
 import de.haumacher.autotranslate.html.extract.HtmlAnalyzer;
@@ -256,12 +259,17 @@ public class HtmlFileTranslator {
 		if (!textsToTranslate.isEmpty()) {
 			_logger.info("  -> " + destLang + ": Translating " + textsToTranslate.size() + " texts: " + sorted(textIdToSourceText.keySet()));
 
-			List<TextResult> results = _translator.translateText(textsToTranslate, _srcLang, destLang);
+			List<String> xmlTexts = new ArrayList<>(textsToTranslate.size());
+			for (String text : textsToTranslate) {
+				xmlTexts.add(toDeepLXml(text));
+			}
+			List<TextResult> results = _translator.translateText(xmlTexts, _srcLang, destLang,
+				new TextTranslationOptions().setTagHandling("xml"));
 
 			int billedChars = 0;
 			for (int i = 0; i < textsToTranslate.size(); i++) {
 				String sourceText = textsToTranslate.get(i);
-				String translatedText = results.get(i).getText();
+				String translatedText = fromDeepLXml(results.get(i).getText());
 				if (translatedText.isEmpty()) {
 					// Safety: Sometimes the translation creates no result (empty string).
 					// When using this empty string, the translation is repeated for each run.
@@ -341,6 +349,71 @@ public class HtmlFileTranslator {
 	 */
 	public int getTotalBilledChars() {
 		return _totalBilledChars;
+	}
+
+	private static final Pattern MARKER_PATTERN = Pattern.compile("</?x[1-9]\\d*>");
+
+	private static final Pattern ENTITY_PATTERN = Pattern.compile("&(lt|gt|quot|apos|amp|#[0-9]+|#x[0-9a-fA-F]+);");
+
+	/**
+	 * Converts an extracted text into the XML sent to DeepL.
+	 *
+	 * <p>
+	 * The texts are translated with {@code tag_handling=xml}, so that DeepL treats
+	 * the {@code <xN>} markers as tags and keeps them intact. As plain text, DeepL
+	 * sometimes rewrote them ({@code <X1>}, {@code </x1} without {@code >}), and
+	 * the markup ended up as literal text on the page. In XML mode, characters
+	 * outside the markers must be escaped.
+	 * </p>
+	 */
+	static String toDeepLXml(String text) {
+		StringBuilder result = new StringBuilder(text.length() + 16);
+		Matcher matcher = MARKER_PATTERN.matcher(text);
+		int pos = 0;
+		while (matcher.find()) {
+			escapeXml(result, text, pos, matcher.start());
+			result.append(matcher.group());
+			pos = matcher.end();
+		}
+		escapeXml(result, text, pos, text.length());
+		return result.toString();
+	}
+
+	private static void escapeXml(StringBuilder out, String text, int start, int end) {
+		for (int i = start; i < end; i++) {
+			char ch = text.charAt(i);
+			switch (ch) {
+				case '&' -> out.append("&amp;");
+				case '<' -> out.append("&lt;");
+				case '>' -> out.append("&gt;");
+				default -> out.append(ch);
+			}
+		}
+	}
+
+	/**
+	 * Converts the XML returned by DeepL back into the marker text format of
+	 * {@link #toDeepLXml(String)}: entities are resolved, the markers are kept.
+	 */
+	static String fromDeepLXml(String xml) {
+		Matcher matcher = ENTITY_PATTERN.matcher(xml);
+		StringBuilder result = new StringBuilder(xml.length());
+		while (matcher.find()) {
+			String name = matcher.group(1);
+			String replacement = switch (name) {
+				case "lt" -> "<";
+				case "gt" -> ">";
+				case "quot" -> "\"";
+				case "apos" -> "'";
+				case "amp" -> "&";
+				default -> new String(Character.toChars(name.startsWith("#x")
+					? Integer.parseInt(name.substring(2), 16)
+					: Integer.parseInt(name.substring(1))));
+			};
+			matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+		}
+		matcher.appendTail(result);
+		return result.toString();
 	}
 
 	/**
