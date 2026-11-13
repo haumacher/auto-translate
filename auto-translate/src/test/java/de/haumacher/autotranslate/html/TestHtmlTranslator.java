@@ -481,8 +481,9 @@ public class TestHtmlTranslator {
 					protected String translateSingle(String text, String targetLang) {
 						// Simulate a translation engine that swallows empty protection tags
 						String translated = super.translateSingle(text, targetLang);
-						// Remove empty protection tags like <x1></x1> (simulating broken translator)
-						return translated.replaceAll("<x(1)></x\\1>", "");
+						// Remove the empty protection tag <x1></x1>, sent to DeepL as
+						// <x i="1"></x> (simulating broken translator)
+						return translated.replace("<x i=\"1\"></x>", "");
 					}
 				},
 				"en",

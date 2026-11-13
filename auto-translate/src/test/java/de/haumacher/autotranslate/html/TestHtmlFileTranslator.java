@@ -60,15 +60,22 @@ public class TestHtmlFileTranslator {
 		assertEquals("foo bar<x1></x1>", result);
 	}
 	@Test
-	public void testToDeepLXmlEscapesTextButKeepsMarkers() {
-		assertEquals("A &amp; B &lt; C &gt; D <x1>Link</x1>",
-			HtmlFileTranslator.toDeepLXml("A & B < C > D <x1>Link</x1>"));
+	public void testToDeepLXmlEscapesTextAndNumbersMarkersByAttribute() {
+		assertEquals("A &amp; B &lt; C &gt; D <x i=\"1\">Link</x> <x i=\"2\">E</x>",
+			HtmlFileTranslator.toDeepLXml("A & B < C > D <x1>Link</x1> <x2>E</x2>"));
 	}
 
 	@Test
-	public void testFromDeepLXmlResolvesEntities() {
+	public void testFromDeepLXmlResolvesEntitiesAndMarkers() {
 		assertEquals("A & B < C > \"D\" 'E' \u00e9 \u00e9 <x1>Link</x1>",
-			HtmlFileTranslator.fromDeepLXml("A &amp; B &lt; C &gt; &quot;D&quot; &apos;E&apos; &#233; &#xe9; <x1>Link</x1>"));
+			HtmlFileTranslator.fromDeepLXml("A &amp; B &lt; C &gt; &quot;D&quot; &apos;E&apos; &#233; &#xe9; <x i=\"1\">Link</x>"));
+	}
+
+	@Test
+	public void testFromDeepLXmlTakesNumberFromAttribute() {
+		// DeepL reorders and capitalizes, the attribute keeps the number.
+		assertEquals("<x2>b <x3>c</x3></x2> <x1>a</x1><x4></x4>",
+			HtmlFileTranslator.fromDeepLXml("<X i=\"2\">b <x i='3'>c</x></X> <x i=\"1\">a</x><x i=\"4\"/>"));
 	}
 
 	@Test
