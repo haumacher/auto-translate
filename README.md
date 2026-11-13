@@ -132,7 +132,7 @@ Maven plugin configuration:
 <plugin>
   <groupId>de.haumacher</groupId>
   <artifactId>auto-translate-maven-plugin</artifactId>
-  <version>1.1.4</version>
+  <version>1.1.5</version>
   <executions>
     <execution>
       <goals>
@@ -233,7 +233,7 @@ Parameters and format identifiers are preserved, only the actual text is transla
 <plugin>
   <groupId>de.haumacher</groupId>
   <artifactId>auto-translate-maven-plugin</artifactId>
-  <version>1.1.4</version>
+  <version>1.1.5</version>
   <executions>
     <execution>
       <goals>
@@ -254,7 +254,7 @@ Run with: `mvn auto-translate:translate-arb`
 
 ```gradle
 plugins {
-    id 'de.haumacher.auto-translate-arb' version '1.1.4'
+    id 'de.haumacher.auto-translate-arb' version '1.1.5'
 }
 
 translateArb {
