@@ -3,8 +3,10 @@ package de.haumacher.autotranslate.html;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -351,7 +353,14 @@ public class HtmlFileTranslator {
 		return _totalBilledChars;
 	}
 
-	private static final Pattern MARKER_PATTERN = Pattern.compile("</?x[1-9]\\d*>");
+	private static final Pattern MARKER_PATTERN = Pattern.compile("<(/)?x([1-9]\\d*)>");
+
+	/**
+	 * A marker tag in DeepL's XML result: {@code <x i="N">}, {@code </x>} or
+	 * {@code <x i="N"/>}, tag name in any case.
+	 */
+	private static final Pattern XML_TAG_PATTERN = Pattern.compile(
+		"<(/)?x(?:\\s+i\\s*=\\s*[\"']([1-9]\\d*)[\"'])?\\s*(/)?>", Pattern.CASE_INSENSITIVE);
 
 	private static final Pattern ENTITY_PATTERN = Pattern.compile("&(lt|gt|quot|apos|amp|#[0-9]+|#x[0-9a-fA-F]+);");
 
@@ -360,10 +369,17 @@ public class HtmlFileTranslator {
 	 *
 	 * <p>
 	 * The texts are translated with {@code tag_handling=xml}, so that DeepL treats
-	 * the {@code <xN>} markers as tags and keeps them intact. As plain text, DeepL
-	 * sometimes rewrote them ({@code <X1>}, {@code </x1} without {@code >}), and
-	 * the markup ended up as literal text on the page. In XML mode, characters
-	 * outside the markers must be escaped.
+	 * the markers as tags and keeps them intact. As plain text, DeepL sometimes
+	 * rewrote them ({@code <X1>}, {@code </x1} without {@code >}), and the markup
+	 * ended up as literal text on the page.
+	 * </p>
+	 *
+	 * <p>
+	 * Each marker {@code <xN>} is sent as {@code <x i="N">}: with the number in the
+	 * tag name, DeepL mixed up tags that differ only in a digit (it returned the
+	 * second link of a sentence as {@code <x1>} instead of {@code <x2>}) and
+	 * capitalized names. Attribute values are passed through unchanged. Characters
+	 * outside the markers are escaped.
 	 * </p>
 	 */
 	static String toDeepLXml(String text) {
@@ -372,7 +388,11 @@ public class HtmlFileTranslator {
 		int pos = 0;
 		while (matcher.find()) {
 			escapeXml(result, text, pos, matcher.start());
-			result.append(matcher.group());
+			if (matcher.group(1) == null) {
+				result.append("<x i=\"").append(matcher.group(2)).append("\">");
+			} else {
+				result.append("</x>");
+			}
 			pos = matcher.end();
 		}
 		escapeXml(result, text, pos, text.length());
@@ -392,12 +412,47 @@ public class HtmlFileTranslator {
 	}
 
 	/**
-	 * Converts the XML returned by DeepL back into the marker text format of
-	 * {@link #toDeepLXml(String)}: entities are resolved, the markers are kept.
+	 * Converts the XML returned by DeepL back into the marker text format:
+	 * {@code <x i="N">...</x>} becomes {@code <xN>...</xN>}, entities in the text
+	 * are resolved.
 	 */
 	static String fromDeepLXml(String xml) {
-		Matcher matcher = ENTITY_PATTERN.matcher(xml);
 		StringBuilder result = new StringBuilder(xml.length());
+		Deque<String> open = new ArrayDeque<>();
+		Matcher matcher = XML_TAG_PATTERN.matcher(xml);
+		int pos = 0;
+		while (matcher.find()) {
+			result.append(unescapeXml(xml.substring(pos, matcher.start())));
+			boolean close = matcher.group(1) != null;
+			String id = matcher.group(2);
+			boolean empty = matcher.group(3) != null;
+			if (close) {
+				// The id of an end tag comes from its start tag.
+				if (!open.isEmpty()) {
+					String startId = open.pop();
+					if (!startId.isEmpty()) {
+						result.append("</x").append(startId).append('>');
+					}
+				}
+			} else if (empty) {
+				if (id != null) {
+					result.append("<x").append(id).append("></x").append(id).append('>');
+				}
+			} else {
+				open.push(id == null ? "" : id);
+				if (id != null) {
+					result.append("<x").append(id).append('>');
+				}
+			}
+			pos = matcher.end();
+		}
+		result.append(unescapeXml(xml.substring(pos)));
+		return result.toString();
+	}
+
+	private static String unescapeXml(String text) {
+		Matcher matcher = ENTITY_PATTERN.matcher(text);
+		StringBuilder result = new StringBuilder(text.length());
 		while (matcher.find()) {
 			String name = matcher.group(1);
 			String replacement = switch (name) {
